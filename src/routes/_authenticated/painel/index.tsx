@@ -39,6 +39,13 @@ function Content({ storeId }: { storeId: string }) {
     ["falhas", "Falhas de integração"],
   ] as const;
 
+  const shortcuts = [
+    ["/painel/leads", "Leads e conversas", "Acompanhar o funil e o histórico"],
+    ["/painel/handoffs", "Handoffs", "Atendimento humano pendente"],
+    ["/painel/catalogo", "Catálogo", "Produtos, preços e estoque"],
+    ["/painel/integracoes", "Integrações", "Status das conexões"],
+  ] as const;
+
   return (
     <div className="space-y-4">
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5" aria-label="Indicadores principais">
@@ -54,12 +61,7 @@ function Content({ storeId }: { storeId: string }) {
 
       <Panel title="Atalhos operacionais" description="Acesse rapidamente os módulos mais usados.">
         <div className="grid sm:grid-cols-2 lg:grid-cols-4">
-          {[
-            ["/painel/leads", "Leads e conversas", "Acompanhar o funil e o histórico"],
-            ["/painel/handoffs", "Handoffs", "Atendimento humano pendente"],
-            ["/painel/catalogo", "Catálogo", "Produtos, preços e estoque"],
-            ["/painel/integracoes", "Integrações", "Status das conexões"],
-          ].map(([to, label, description]) => (
+          {shortcuts.map(([to, label, description]) => (
             <Link
               key={to}
               to={to}
