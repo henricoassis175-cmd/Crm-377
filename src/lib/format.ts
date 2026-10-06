@@ -1,40 +1,76 @@
-export function formatBRL(cents: number | null | undefined): string {
-  if (cents === null || cents === undefined) return "—";
-  return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-}
+import { format, formatDistanceToNow } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
-export function parseBRLToCents(valor: string): number {
-  const bruto = valor.replace(/[^\d,.-]/g, "");
-  // Formato "1234.56" (CSV/planilha): ponto é separador decimal.
-  const limpo = /^-?\d+\.\d{1,2}$/.test(bruto)
-    ? bruto
-    : bruto.replace(/\./g, "").replace(",", ".");
-  const n = Number(limpo);
-  return Number.isFinite(n) ? Math.round(n * 100) : 0;
-}
-
-
-export function formatDateTime(iso: string | null | undefined): string {
+export function fmtDateTime(iso: string | null | undefined): string {
   if (!iso) return "—";
-  return new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "—" : format(d, "dd/MM/yyyy HH:mm", { locale: ptBR });
 }
 
-export function formatDate(iso: string | null | undefined): string {
+export function fmtTime(iso: string | null | undefined): string {
   if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("pt-BR");
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "—" : format(d, "HH:mm", { locale: ptBR });
 }
 
-/** Mascara PII em textos exibidos em logs e auditoria. */
-export function maskPII(texto: string | null | undefined): string {
-  if (!texto) return "—";
-  return texto
-    .replace(/([\w.+-]{1,3})[\w.+-]*@([\w-]+\.)+\w+/g, "$1***@***")
-    .replace(/\+?\d{2}?\s?\(?\d{2}\)?\s?\d{4,5}[-\s]?\d{4}/g, (m) => `***${m.slice(-2)}`)
-    .replace(/\b\d{3}\.\d{3}\.\d{3}-\d{2}\b/g, "***.***.***-**");
+export function fmtRelative(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "—" : formatDistanceToNow(d, { addSuffix: true, locale: ptBR });
 }
 
-export function maskName(nome: string | null | undefined): string {
-  if (!nome) return "—";
-  const partes = nome.trim().split(/\s+/);
-  return partes.map((p, i) => (i === 0 ? p : `${p[0] ?? ""}.`)).join(" ");
+export function fmtNumber(n: number | null | undefined): string {
+  return n == null ? "—" : new Intl.NumberFormat("pt-BR").format(n);
 }
+
+export function fmtCurrency(n: number | null | undefined, currency = "BRL"): string {
+  return n == null ? "—" : new Intl.NumberFormat("pt-BR", { style: "currency", currency }).format(n);
+}
+
+export function fmtMs(n: number | null | undefined): string {
+  if (n == null) return "—";
+  return n >= 1000 ? `${(n / 1000).toFixed(1)} s` : `${Math.round(n)} ms`;
+}
+
+/** Mascara telefone mantendo os 4 últimos dígitos. */
+export function maskPhone(v: string | null | undefined): string {
+  if (!v) return "—";
+  const digits = v.replace(/\D/g, "");
+  if (digits.length < 5) return "••••";
+  return `•••• ${digits.slice(-4)}`;
+}
+
+export function maskEmail(v: string | null | undefined): string {
+  if (!v) return "—";
+  const [user, domain] = v.split("@");
+  if (!user || !domain) return "••••";
+  return `${user.slice(0, 2)}•••@${domain}`;
+}
+
+export const ROLE_LABEL = {
+  admin: "Administrador Vexa",
+  gestor: "Administrador da loja",
+  operador: "Vendedor",
+} as const;
+
+export const TEMPERATURA_LABEL = { fria: "Fria", morna: "Morna", quente: "Quente" } as const;
+export const ESTAGIO_LABEL = {
+  abertura: "Abertura",
+  desenvolvimento: "Desenvolvimento",
+  ancoragem: "Ancoragem",
+  pre_fechamento: "Pré-fechamento",
+  handoff: "Handoff",
+} as const;
+export const MOTIVO_LABEL = {
+  sinal_fechamento: "Sinal de fechamento",
+  troca: "Troca",
+  insistencia_preco: "Insistência em preço",
+  pedido_humano: "Pedido de humano",
+  fora_escopo: "Fora de escopo",
+  falha_tecnica: "Falha técnica",
+} as const;
+export const HANDOFF_STATUS_LABEL = {
+  pendente: "Pendente",
+  em_atendimento: "Em atendimento",
+  concluido: "Concluído",
+} as const;

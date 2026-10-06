@@ -1,394 +1,193 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import {
-  AlertTriangle,
-  ArrowRight,
-  ArrowRightLeft,
-  CheckCircle2,
-  Clock3,
-  Layers,
-  MessageSquare,
-  PlugZap,
-  Search,
-  Sparkles,
-  Users,
-} from "lucide-react";
-import { AppShell } from "@/components/app-shell";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { supabase } from "@/integrations/supabase/client";
-import { useStores } from "@/lib/store-context";
-import {
-  rotuloEstagio,
-  rotuloTemperatura,
-  type Estagio,
-  type Temperatura,
-} from "@/lib/agent-contract";
-import { formatDateTime } from "@/lib/format";
+import { ArrowRight, PlugZap, Workflow } from "lucide-react";
+import { PageBody, Panel, Pill } from "@/components/panel";
+import { QueryState, EmptyState } from "@/components/data-state";
+import { StoreScope } from "@/components/store-scope";
+import { RoleGate } from "@/components/role-gate";
+import * as Q from "@/lib/queries";
+import * as F from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/painel/")({
   head: () => ({
     meta: [
-      { title: "Visão geral | CRM 377 - Agente Comercial" },
-      {
-        name: "description",
-        content:
-          "Indicadores reais de atendimentos, temperatura, handoffs, falhas e latência do agente.",
-      },
-      { property: "og:title", content: "Visão geral | CRM 377" },
-      { property: "og:description", content: "Painel operacional do agente comercial 377." },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
+      { title: "Visão geral — CRM 377" },
+      { name: "description", content: "Visão geral operacional do CRM 377." },
+      { property: "og:title", content: "Visão geral — CRM 377" },
+      { property: "og:description", content: "Visão geral operacional do CRM 377." },
     ],
   }),
-  component: Painel,
+  component: Page,
 });
 
-function Painel() {
-  const { storeId, store, stores, loading } = useStores();
-  const { data, isLoading } = useQuery({
-    queryKey: ["dashboard", storeId],
-    enabled: !!storeId,
-    queryFn: async () => {
-      if (!storeId)
-        return {
-          mensagens: [],
-          leads: [],
-          handoffs: [],
-          eventos: [],
-          integracoes: [],
-        };
-      const desde = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
-      const [msgs, leads, handoffs, eventos, integracoes] = await Promise.all([
-        supabase
-          .from("messages")
-          .select("id, latency_ms, created_at")
-          .eq("store_id", storeId)
-          .gte("created_at", desde),
-        supabase.from("leads").select("temperature, stage").eq("store_id", storeId),
-        supabase.from("handoffs").select("id, status, created_at").eq("store_id", storeId),
-        supabase
-          .from("integration_events")
-          .select("success, created_at, kind")
-          .eq("store_id", storeId)
-          .gte("created_at", desde),
-        supabase
-          .from("integration_settings")
-          .select("kind, status, last_tested_at")
-          .eq("store_id", storeId),
-      ]);
-      return {
-        mensagens: msgs.data ?? [],
-        leads: leads.data ?? [],
-        handoffs: handoffs.data ?? [],
-        eventos: eventos.data ?? [],
-        integracoes: integracoes.data ?? [],
-      };
-    },
-  });
-  const mensagens = data?.mensagens ?? [];
-  const latencias = mensagens
-    .map((m) => m.latency_ms)
-    .filter((v): v is number => typeof v === "number");
-  const latenciaMedia = latencias.length
-    ? Math.round(latencias.reduce((a, b) => a + b, 0) / latencias.length)
-    : null;
-  const falhas = (data?.eventos ?? []).filter((e) => !e.success).length;
-  const pendentes = (data?.handoffs ?? []).filter((h) => h.status === "pendente").length;
-  const porTemperatura = (Object.keys(rotuloTemperatura) as Temperatura[]).map((t) => ({
-    t,
-    n: (data?.leads ?? []).filter((l) => l.temperature === t).length,
-  }));
-  const porEstagio = (Object.keys(rotuloEstagio) as Estagio[]).map((s) => ({
-    s,
-    n: (data?.leads ?? []).filter((l) => l.stage === s).length,
-  }));
-  const cards = [
-    {
-      label: "Mensagens em 7 dias",
-      valor: mensagens.length,
-      nota: "Registradas pelo fluxo n8n",
-      icon: MessageSquare,
-    },
-    {
-      label: "Leads ativos",
-      valor: data?.leads.length ?? 0,
-      nota: "Na loja selecionada",
-      icon: Users,
-    },
-    {
-      label: "Handoffs pendentes",
-      valor: pendentes,
-      nota: "Aguardando atendimento",
-      icon: ArrowRightLeft,
-    },
-    {
-      label: "Latência média",
-      valor: latenciaMedia === null ? "—" : `${latenciaMedia} ms`,
-      nota: falhas ? `${falhas} falha(s) em 7 dias` : "Sem falhas em 7 dias",
-      icon: Clock3,
-    },
-  ];
+function Page() {
   return (
-    <AppShell
-      title="Visão geral"
-      description={store ? store.store_name : "Selecione ou cadastre uma loja"}
-    >
-      {!loading && !stores.length ? (
-        <Card>
-          <CardContent className="py-10 text-center text-sm text-muted-foreground">
-            Nenhuma loja cadastrada.{" "}
-            <Link to="/painel/lojas" className="font-medium text-primary hover:underline">
-              Cadastre a loja piloto
-            </Link>{" "}
-            para começar.
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-4">
-          <section className="reveal-in flex flex-col gap-5 pb-2 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="mb-1.5 text-[10px] font-semibold text-subtle">CENTRAL DE OPERAÇÕES</p>
-              <h1 className="enterprise-title text-foreground">Acompanhe sua operação</h1>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Dados reais de {store?.store_name ?? "sua loja"}, atualizados pelo CRM 377.
-              </p>
-            </div>
-            <Button asChild size="sm">
-              <Link to="/painel/leads">
-                <Users className="size-3.5" />
-                Ver leads
-              </Link>
-            </Button>
-          </section>
-          <Link
-            to="/painel/leads"
-            className="reveal-in grid min-h-[66px] grid-cols-[34px_minmax(0,1fr)_auto] items-center gap-3 rounded-lg bg-surface px-3 shadow-xs transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-px hover:shadow-md active:translate-y-0 active:shadow-xs"
-          >
-            <span className="grid size-8 place-items-center rounded-md bg-primary-soft text-primary">
-              <Sparkles className="size-4" />
-            </span>
-            <span className="text-xs text-muted-foreground">
-              O que precisa da sua atenção hoje?
-            </span>
-            <span className="grid size-8 place-items-center rounded-md bg-ink text-primary-foreground">
-              <ArrowRight className="size-4" />
-            </span>
-          </Link>
+    <PageBody>
+      <RoleGate min="operador">
+        <StoreScope>{(storeId) => <Content storeId={storeId} />}</StoreScope>
+      </RoleGate>
+    </PageBody>
+  );
+}
 
-          <section className="overflow-hidden enterprise-panel">
-            <div className="flex min-h-16 flex-wrap gap-3 items-center justify-between border-b px-4 py-3">
-              <div>
-                <p className="text-[10px] font-semibold text-subtle">FUNIL COMERCIAL</p>
-                <h3 className="mt-0.5 text-sm font-medium">Distribuição de leads</h3>
-              </div>
-              <Button asChild variant="outline" size="sm">
-                <Link to="/painel/leads">
-                  Abrir leads <ArrowRight />
-                </Link>
-              </Button>
-            </div>
-            <div className="grid md:grid-cols-2">
-              <div className="border-b p-4 md:border-b-0 md:border-r">
-                <div className="mb-3 flex items-center gap-2">
-                  <Users className="size-4 text-primary" />
-                  <p className="text-xs font-semibold">Temperatura</p>
-                </div>
-                <div className="space-y-1">
-                  {porTemperatura.map((x) => (
-                    <div
-                      key={x.t}
-                      className="flex h-9 items-center justify-between border-b text-xs last:border-0"
-                    >
-                      <span className="text-muted-foreground">{rotuloTemperatura[x.t]}</span>
-                      <Badge variant="outline">{x.n}</Badge>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="p-4">
-                <div className="mb-3 flex items-center gap-2">
-                  <Layers className="size-4 text-primary" />
-                  <p className="text-xs font-semibold">Estágios</p>
-                </div>
-                <div className="space-y-1">
-                  {porEstagio.map((x) => (
-                    <div
-                      key={x.s}
-                      className="flex h-9 items-center justify-between border-b text-xs last:border-0"
-                    >
-                      <span className="text-muted-foreground">{rotuloEstagio[x.s]}</span>
-                      <Badge variant="outline">{x.n}</Badge>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </section>
-          <div className="flex flex-wrap items-center gap-1.5 pb-3">
-            <span className="mr-1 text-[11px] text-subtle">Sugestões</span>
-            {[
-              { label: "Conversas abertas", to: "/painel/leads" },
-              { label: "Handoffs pendentes", to: "/painel/handoffs" },
-              { label: "Saúde das integrações", to: "/painel/integracoes" },
-            ].map((item) => (
-              <Button
-                key={item.to}
-                asChild
-                variant="secondary"
-                size="sm"
-                className="h-7 text-[11px] shadow-none"
-              >
-                <Link to={item.to}>{item.label}</Link>
-              </Button>
-            ))}
-          </div>
+function Content({ storeId }: { storeId: string }) {
+  const kpis = [
+    ["mensagens7d", "Mensagens 7 dias"],
+    ["leadsAtivos", "Leads ativos"],
+    ["handoffsPendentes", "Handoffs pendentes"],
+    ["latencia", "Latência média"],
+    ["falhas", "Falhas de integração"],
+  ] as const;
 
-          <section className="reveal-in overflow-hidden enterprise-panel">
-            <div className="flex min-h-16 flex-wrap gap-3 items-center justify-between border-b px-4 py-3">
-              <div>
-                <p className="text-[10px] font-semibold text-subtle">DESEMPENHO</p>
-                <h3 className="mt-0.5 text-sm font-medium">Resumo comercial</h3>
-              </div>
-              <Badge variant="outline">Últimos 7 dias</Badge>
-            </div>
-            <div className="grid sm:grid-cols-2 xl:grid-cols-4">
-              {cards.map((c, index) => (
-                <article
-                  key={c.label}
-                  className="min-h-[124px] border-b p-4 transition-colors hover:bg-muted/30 sm:border-r xl:border-b-0"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">{c.label}</span>
-                    <c.icon className="size-3.5 text-muted-foreground" />
+  const shortcuts = [
+    ["/painel/leads", "Leads e conversas", "Acompanhar o funil e o histórico"],
+    ["/painel/handoffs", "Handoffs", "Atendimento humano pendente"],
+    ["/painel/catalogo", "Catálogo", "Produtos, preços e estoque"],
+    ["/painel/integracoes", "Integrações", "Status das conexões"],
+  ] as const;
+
+  return (
+    <div className="space-y-4">
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5" aria-label="Indicadores principais">
+        {kpis.map(([k, label]) => (
+          <Kpi key={k} storeId={storeId} k={k} label={label} />
+        ))}
+      </section>
+
+      <div className="grid gap-4 xl:grid-cols-[1.35fr_.85fr]">
+        <LeadDistribution storeId={storeId} />
+        <IntegrationHealth storeId={storeId} />
+      </div>
+
+      <Panel title="Atalhos operacionais" description="Acesse rapidamente os módulos mais usados.">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4">
+          {shortcuts.map(([to, label, description]) => (
+            <Link
+              key={to}
+              to={to}
+              className="group flex min-h-20 items-center justify-between gap-3 border-b px-4 py-3 transition-colors hover:bg-muted/35 sm:border-r lg:border-b-0"
+            >
+              <span>
+                <strong className="block text-[13px] font-medium">{label}</strong>
+                <small className="mt-1 block text-[11px] text-muted-foreground">{description}</small>
+              </span>
+              <ArrowRight className="size-3.5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+            </Link>
+          ))}
+        </div>
+      </Panel>
+    </div>
+  );
+}
+
+function Kpi({
+  storeId,
+  k,
+  label,
+}: {
+  storeId: string;
+  k: Parameters<typeof Q.kpiQuery>[1];
+  label: string;
+}) {
+  const q = useQuery(Q.kpiQuery(storeId, k));
+  return (
+    <Panel className="card-lift">
+      <div className="p-4">
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <QueryState query={q}>
+          {(v) => (
+            <p className="mt-1 text-2xl font-semibold">
+              {k === "latencia" ? F.fmtMs(v) : F.fmtNumber(v)}
+            </p>
+          )}
+        </QueryState>
+      </div>
+    </Panel>
+  );
+}
+
+function LeadDistribution({ storeId }: { storeId: string }) {
+  const q = useQuery(Q.leadDistributionQuery(storeId));
+  const temperatures = ["fria", "morna", "quente"] as const;
+  const stages = ["abertura", "desenvolvimento", "ancoragem", "pre_fechamento", "handoff"] as const;
+
+  return (
+    <Panel title="Funil comercial" description="Distribuição real dos leads ativos.">
+      <QueryState
+        query={q}
+        isEmpty={(rows) => !rows.length}
+        empty={<EmptyState title="Nenhum lead ativo" description="A distribuição aparecerá quando houver leads na loja." />}
+      >
+        {(rows) => (
+          <div className="grid md:grid-cols-2">
+            <div className="border-b p-4 md:border-r md:border-b-0">
+              <p className="mb-3 text-xs font-medium">Temperatura</p>
+              <div className="space-y-1">
+                {temperatures.map((temperature) => (
+                  <div key={temperature} className="flex min-h-9 items-center justify-between border-b last:border-0">
+                    <span className="text-[12px] text-muted-foreground">{F.TEMPERATURA_LABEL[temperature]}</span>
+                    <Pill>{rows.filter((row) => row.temperatura === temperature).length}</Pill>
                   </div>
-                  <strong className="mt-3 block text-[28px] font-medium">
-                    {isLoading ? "…" : c.valor}
-                  </strong>
-                  <small
-                    className={
-                      index === 3 && !falhas
-                        ? "mt-2 block text-[11px] text-success"
-                        : "mt-2 block text-[11px] text-muted-foreground"
-                    }
-                  >
-                    {c.nota}
-                  </small>
-                </article>
-              ))}
-            </div>
-          </section>
-
-          <div className="reveal-in grid gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(300px,.85fr)]">
-            <section className="enterprise-panel overflow-hidden">
-              <div className="flex min-h-16 items-center justify-between gap-2 border-b px-4">
-                <div>
-                  <p className="text-[10px] font-semibold text-subtle">TEMPO REAL</p>
-                  <h3 className="mt-0.5 text-sm font-medium">Operação comercial</h3>
-                </div>
-                <Button asChild variant="outline" size="sm">
-                  <Link to="/painel/leads">Abrir conversas <ArrowRight /></Link>
-                </Button>
-              </div>
-              <div className="grid divide-y">
-                <div className="flex min-h-14 items-center justify-between px-4 text-xs">
-                  <span className="text-muted-foreground">Leads ativos</span>
-                  <strong className="font-medium">{data?.leads.length ?? 0}</strong>
-                </div>
-                <div className="flex min-h-14 items-center justify-between px-4 text-xs">
-                  <span className="text-muted-foreground">Handoffs pendentes</span>
-                  <strong className="font-medium">{pendentes}</strong>
-                </div>
-                <div className="flex min-h-14 items-center justify-between px-4 text-xs">
-                  <span className="text-muted-foreground">Mensagens em 7 dias</span>
-                  <strong className="font-medium">{mensagens.length}</strong>
-                </div>
-              </div>
-            </section>
-            <section className="overflow-hidden enterprise-panel">
-              <div className="flex min-h-16 flex-wrap gap-3 items-center justify-between border-b px-4 py-3">
-                <div>
-                  <p className="text-[10px] font-semibold text-subtle">INFRAESTRUTURA</p>
-                  <h3 className="mt-0.5 text-sm font-medium">Saúde do sistema</h3>
-                </div>
-                <PlugZap className="size-4 text-muted-foreground" />
-              </div>
-              <div>
-                {(data?.integracoes ?? []).map((i) => (
-                  <Link
-                    key={i.kind}
-                    to="/painel/integracoes"
-                    className="grid min-h-14 grid-cols-[32px_1fr_auto_14px] items-center gap-2 border-b px-4 transition-colors last:border-0 hover:bg-muted/40"
-                  >
-                    <span className="grid size-8 place-items-center rounded-md border bg-muted/30 text-[9px] font-bold uppercase">
-                      {i.kind.slice(0, 2)}
-                    </span>
-                    <span>
-                      <strong className="block text-[10px] font-semibold uppercase">
-                        {i.kind}
-                      </strong>
-                      <small className="text-[11px] text-muted-foreground">
-                        {i.last_tested_at ? formatDateTime(i.last_tested_at) : "Nunca testado"}
-                      </small>
-                    </span>
-                    <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                      {i.status === "testado" ? (
-                        <CheckCircle2 className="size-3.5 text-success" />
-                      ) : (
-                        <AlertTriangle className="size-3.5 text-warning" />
-                      )}
-                      {i.status === "testado"
-                        ? "Operacional"
-                        : i.status === "configurado"
-                          ? "Configurado"
-                          : "Pendente"}
-                    </span>
-                    <ArrowRight className="size-3.5 text-muted-foreground" />
-                  </Link>
                 ))}
               </div>
-              {!(data?.integracoes ?? []).length ? (
-                <p className="p-6 text-center text-xs text-muted-foreground">
-                  Nenhuma integração registrada.
-                </p>
-              ) : null}
-            </section>
-          </div>
-
-          <section className="reveal-in overflow-hidden enterprise-panel">
-            <div className="flex min-h-16 flex-wrap gap-3 items-center justify-between border-b px-4 py-3">
-              <div>
-                <p className="text-[10px] font-semibold text-subtle">ATALHOS</p>
-                <h3 className="mt-0.5 text-sm font-medium">Ações frequentes</h3>
+            </div>
+            <div className="p-4">
+              <p className="mb-3 text-xs font-medium">Estágios</p>
+              <div className="space-y-1">
+                {stages.map((stage) => (
+                  <div key={stage} className="flex min-h-9 items-center justify-between border-b last:border-0">
+                    <span className="text-[12px] text-muted-foreground">{F.ESTAGIO_LABEL[stage]}</span>
+                    <Pill>{rows.filter((row) => row.estagio === stage).length}</Pill>
+                  </div>
+                ))}
               </div>
-              <Search className="size-4 text-muted-foreground" />
             </div>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-4">
-              {(
-                [
-                  ["Catálogo", "Produtos e estoque", "/painel/catalogo"],
-                  ["Laboratório", "Testar o agente", "/painel/laboratorio"],
-                  ["Integrações", "Conferir conexões", "/painel/integracoes"],
-                  ["Handoffs", "Atendimento humano", "/painel/handoffs"],
-                ] as const
-              ).map(([label, detail, to]) => (
-                <Link
-                  key={to}
-                  to={to}
-                  className="group min-h-20 border-b p-4 transition-colors hover:bg-muted/40 sm:border-r lg:border-b-0"
-                >
-                  <span className="flex items-center justify-between text-xs font-semibold">
-                    {label}
-                    <ArrowRight className="size-3.5 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-                  </span>
-                  <small className="mt-1 block text-[11px] text-muted-foreground">{detail}</small>
-                </Link>
-              ))}
-            </div>
-          </section>
-        </div>
-      )}
-    </AppShell>
+          </div>
+        )}
+      </QueryState>
+    </Panel>
+  );
+}
+
+function IntegrationHealth({ storeId }: { storeId: string }) {
+  const q = useQuery(Q.integrationsQuery(storeId));
+
+  return (
+    <Panel
+      title="Saúde das integrações"
+      description="Nenhuma conexão é considerada saudável sem teste registrado."
+      actions={<PlugZap className="size-4 text-muted-foreground" />}
+    >
+      <QueryState
+        query={q}
+        isEmpty={(rows) => !rows.length}
+        empty={<EmptyState title="Nenhuma integração configurada" />}
+      >
+        {(rows) => (
+          <div className="divide-y">
+            {rows.map((integration) => (
+              <Link
+                key={integration.id}
+                to="/painel/integracoes"
+                className="flex min-h-14 items-center gap-3 px-4 py-2 transition-colors hover:bg-muted/35"
+              >
+                <span className="grid size-8 shrink-0 place-items-center rounded-md border bg-muted/30">
+                  <Workflow className="size-3.5 text-muted-foreground" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <strong className="block truncate text-[12px] font-medium capitalize">{integration.provider}</strong>
+                  <small className="block truncate text-[10px] text-muted-foreground">
+                    {integration.last_tested_at ? F.fmtDateTime(integration.last_tested_at) : "Nunca testado"}
+                  </small>
+                </span>
+                <Pill tone={integration.status === "testado" ? "success" : integration.status === "configurado" ? "warning" : "neutral"}>
+                  {integration.status.replaceAll("_", " ")}
+                </Pill>
+              </Link>
+            ))}
+          </div>
+        )}
+      </QueryState>
+    </Panel>
   );
 }

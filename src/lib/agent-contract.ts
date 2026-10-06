@@ -1,16 +1,7 @@
-/**
- * Contrato do Agente 377 — entrada Kommo e saída JSON estrita.
- * Compartilhado entre laboratório, painel e documentação.
- */
+import { z } from "zod";
 
 export const TEMPERATURAS = ["fria", "morna", "quente"] as const;
-export const ESTAGIOS = [
-  "abertura",
-  "desenvolvimento",
-  "ancoragem",
-  "pre_fechamento",
-  "handoff",
-] as const;
+export const ESTAGIOS = ["abertura", "desenvolvimento", "ancoragem", "pre_fechamento", "handoff"] as const;
 export const ACOES = ["conversar", "passar_preco", "encaminhar_humano"] as const;
 export const MOTIVOS_HANDOFF = [
   "sinal_fechamento",
@@ -18,160 +9,99 @@ export const MOTIVOS_HANDOFF = [
   "insistencia_preco",
   "pedido_humano",
   "fora_escopo",
+  "falha_tecnica",
 ] as const;
+export const CHANNELS = ["whatsapp", "instagram", "outro"] as const;
 
-export type Temperatura = (typeof TEMPERATURAS)[number];
-export type Estagio = (typeof ESTAGIOS)[number];
-export type Acao = (typeof ACOES)[number];
-export type MotivoHandoff = (typeof MOTIVOS_HANDOFF)[number];
+export const DEFAULT_AI_MODEL = "claude-sonnet-4-5";
 
-export interface AgentInput {
-  store_id: string;
-  contact_id: string;
-  lead_id: string;
-  conversation_id: string;
-  message_text: string;
-  return_url: string;
-  event_id: string;
-  channel: "whatsapp" | "instagram" | "outro";
-}
+export const agentInputSchema = z.object({
+  store_id: z.string().min(1).max(120),
+  contact_id: z.string().min(1).max(120),
+  lead_id: z.string().min(1).max(120),
+  conversation_id: z.string().min(1).max(120),
+  message_text: z.string().min(1).max(4000),
+  return_url: z.string().url().max(2000),
+  event_id: z.string().min(1).max(200),
+  channel: z.enum(CHANNELS),
+});
+export type AgentInput = z.infer<typeof agentInputSchema>;
 
-export interface AgentOutput {
-  resposta: string;
-  temperatura_lead: Temperatura;
-  estagio: Estagio;
-  acao: Acao;
-  motivo_handoff: MotivoHandoff | null;
-}
+export const agentOutputSchema = z
+  .object({
+    resposta: z.string().min(1).max(4000),
+    temperatura_lead: z.enum(TEMPERATURAS),
+    estagio: z.enum(ESTAGIOS),
+    acao: z.enum(ACOES),
+    motivo_handoff: z.enum(MOTIVOS_HANDOFF).nullable(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.acao === "encaminhar_humano" && !v.motivo_handoff) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["motivo_handoff"],
+        message: "motivo_handoff é obrigatório quando acao = encaminhar_humano",
+      });
+    }
+  });
+export type AgentOutput = z.infer<typeof agentOutputSchema>;
 
-export const MENSAGEM_NEUTRA_FALLBACK =
+export const FALLBACK_MESSAGE =
   "Só um instante, vou chamar alguém do time para te ajudar melhor por aqui.";
 
 export const FALLBACK_OUTPUT: AgentOutput = {
-  resposta: MENSAGEM_NEUTRA_FALLBACK,
+  resposta: FALLBACK_MESSAGE,
   temperatura_lead: "morna",
   estagio: "handoff",
   acao: "encaminhar_humano",
   motivo_handoff: "fora_escopo",
 };
 
-/** Remove crases/code fences e recorta do primeiro `{` ao último `}`. */
-export function extractJsonBlock(raw: string): string | null {
-  if (!raw) return null;
-  const semFences = raw
-    .replace(/```(?:json)?/gi, "")
-    .replace(/`/g, "")
-    .trim();
-  const inicio = semFences.indexOf("{");
-  const fim = semFences.lastIndexOf("}");
-  if (inicio === -1 || fim === -1 || fim <= inicio) return null;
-  return semFences.slice(inicio, fim + 1);
+export type ParseResult = {
+  output: AgentOutput;
+  valid: boolean;
+  errors: string[];
+  usedFallback: boolean;
+};
+
+/** Extrai o primeiro objeto JSON de um texto livre do modelo. */
+function extractJson(raw: string): unknown {
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
+  const candidate = fenced?.[1] ?? raw;
+  const start = candidate.indexOf("{");
+  const end = candidate.lastIndexOf("}");
+  if (start === -1 || end <= start) throw new Error("Nenhum objeto JSON encontrado na resposta.");
+  return JSON.parse(candidate.slice(start, end + 1));
 }
 
-export interface ParseResult {
-  ok: boolean;
-  data: AgentOutput;
-  erros: string[];
-}
-
-/** Parse tolerante + validação estrita dos enums. Nunca lança. */
-export function parseAgentOutput(raw: string): ParseResult {
-  const erros: string[] = [];
-  const bloco = extractJsonBlock(raw);
-  if (!bloco) {
-    return { ok: false, data: FALLBACK_OUTPUT, erros: ["JSON não encontrado na resposta"] };
+/** Nunca lança: qualquer saída fora do contrato vira o fallback seguro. */
+export function parseAgentOutput(raw: string | null | undefined): ParseResult {
+  if (!raw) {
+    return { output: FALLBACK_OUTPUT, valid: false, errors: ["Resposta vazia do modelo."], usedFallback: true };
   }
-  let obj: Record<string, unknown>;
+  let data: unknown;
   try {
-    obj = JSON.parse(bloco) as Record<string, unknown>;
-  } catch {
-    return { ok: false, data: FALLBACK_OUTPUT, erros: ["JSON inválido"] };
+    data = extractJson(raw);
+  } catch (e) {
+    return {
+      output: FALLBACK_OUTPUT,
+      valid: false,
+      errors: [e instanceof Error ? e.message : "JSON inválido."],
+      usedFallback: true,
+    };
   }
-
-  const resposta = typeof obj["resposta"] === "string" ? (obj["resposta"] as string).trim() : "";
-  if (!resposta) erros.push("campo 'resposta' ausente ou vazio");
-
-  const temp = obj["temperatura_lead"];
-  const est = obj["estagio"];
-  const ac = obj["acao"];
-  let motivoRaw = obj["motivo_handoff"];
-  if (motivoRaw === "null" || motivoRaw === "") motivoRaw = null;
-
-  const temperatura = TEMPERATURAS.includes(temp as Temperatura) ? (temp as Temperatura) : null;
-  if (!temperatura) erros.push("temperatura_lead fora do enum");
-  const estagio = ESTAGIOS.includes(est as Estagio) ? (est as Estagio) : null;
-  if (!estagio) erros.push("estagio fora do enum");
-  const acao = ACOES.includes(ac as Acao) ? (ac as Acao) : null;
-  if (!acao) erros.push("acao fora do enum");
-
-  let motivo: MotivoHandoff | null = null;
-  if (motivoRaw !== null && motivoRaw !== undefined) {
-    if (MOTIVOS_HANDOFF.includes(motivoRaw as MotivoHandoff)) {
-      motivo = motivoRaw as MotivoHandoff;
-    } else {
-      erros.push("motivo_handoff fora do enum");
-    }
+  const parsed = agentOutputSchema.safeParse(data);
+  if (!parsed.success) {
+    return {
+      output: FALLBACK_OUTPUT,
+      valid: false,
+      errors: parsed.error.issues.map((i) => `${i.path.join(".") || "(raiz)"}: ${i.message}`),
+      usedFallback: true,
+    };
   }
-  if (acao === "encaminhar_humano" && !motivo) {
-    erros.push("motivo_handoff obrigatório quando acao = encaminhar_humano");
-  }
-
-  if (erros.length) return { ok: false, data: FALLBACK_OUTPUT, erros };
-
-  return {
-    ok: true,
-    erros: [],
-    data: {
-      resposta,
-      temperatura_lead: temperatura!,
-      estagio: estagio!,
-      acao: acao!,
-      motivo_handoff: motivo,
-    },
-  };
+  return { output: parsed.data, valid: true, errors: [], usedFallback: false };
 }
 
-/** Allowlist de return_url: apenas HTTPS em domínios Kommo. */
-export function isReturnUrlPermitida(url: string, kommoSubdomain?: string | null): boolean {
-  try {
-    const u = new URL(url);
-    if (u.protocol !== "https:") return false;
-    const host = u.hostname.toLowerCase();
-    const dominiosOk = ["kommo.com", "amocrm.com", "amocrm.ru"];
-    const dominioOk = dominiosOk.some((d) => host === d || host.endsWith(`.${d}`));
-    if (!dominioOk) return false;
-    if (kommoSubdomain) return host.startsWith(`${kommoSubdomain.toLowerCase()}.`);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export const rotuloTemperatura: Record<Temperatura, string> = {
-  fria: "Fria",
-  morna: "Morna",
-  quente: "Quente",
-};
-
-export const rotuloEstagio: Record<Estagio, string> = {
-  abertura: "Abertura",
-  desenvolvimento: "Desenvolvimento",
-  ancoragem: "Ancoragem",
-  pre_fechamento: "Pré-fechamento",
-  handoff: "Handoff",
-};
-
-export const rotuloAcao: Record<Acao, string> = {
-  conversar: "Conversar",
-  passar_preco: "Passar preço",
-  encaminhar_humano: "Encaminhar humano",
-};
-
-export const rotuloMotivo: Record<string, string> = {
-  sinal_fechamento: "Sinal de fechamento",
-  troca: "Troca",
-  insistencia_preco: "Insistência em preço",
-  pedido_humano: "Pedido de humano",
-  fora_escopo: "Fora de escopo",
-  falha_tecnica: "Falha técnica",
-};
+export const CONTRACT_INSTRUCTIONS = `Responda SOMENTE com um objeto JSON válido, sem texto extra, no formato:
+{"resposta":"texto","temperatura_lead":"fria|morna|quente","estagio":"abertura|desenvolvimento|ancoragem|pre_fechamento|handoff","acao":"conversar|passar_preco|encaminhar_humano","motivo_handoff":null}
+Quando acao = "encaminhar_humano", motivo_handoff é obrigatório e deve ser um de: ${MOTIVOS_HANDOFF.join(", ")}.`;

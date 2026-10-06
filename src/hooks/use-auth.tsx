@@ -1,84 +1,101 @@
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
+import type { AppRole } from "@/lib/db-types";
 
-export type AppRole = "admin" | "gestor" | "operador";
-
-export interface AuthState {
-  user: User | null;
-  session: Session | null;
+type AuthState = {
+  configured: boolean;
   loading: boolean;
-}
+  session: Session | null;
+  user: User | null;
+  role: AppRole | null;
+  roleLoading: boolean;
+  roleError: string | null;
+  signOut: () => Promise<void>;
+};
 
-export function useAuth(): AuthState {
-  const [state, setState] = useState<AuthState>({
-    user: null,
-    session: null,
-    loading: true,
-  });
+const AuthContext = createContext<AuthState | null>(null);
+
+const ROLE_RANK: Record<AppRole, number> = { admin: 3, gestor: 2, operador: 1 };
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [session, setSession] = useState<Session | null>(null);
+  const [loading, setLoading] = useState(isSupabaseConfigured);
+  const [role, setRole] = useState<AppRole | null>(null);
+  const [roleLoading, setRoleLoading] = useState(false);
+  const [roleError, setRoleError] = useState<string | null>(null);
 
   useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setState({ user: session?.user ?? null, session, loading: false });
-    });
-
-    supabase.auth.getSession().then(({ data }) => {
-      setState({ user: data.session?.user ?? null, session: data.session, loading: false });
-    });
-
+    if (!supabase) return;
+    const client = supabase;
+    const { data: sub } = client.auth.onAuthStateChange((_e, s) => setSession(s));
+    client.auth
+      .getSession()
+      .then(({ data }) => setSession(data.session))
+      .catch((e: unknown) => console.error("[auth] getSession", e))
+      .finally(() => setLoading(false));
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  return state;
-}
-
-export interface Profile {
-  id: string;
-  full_name: string | null;
-  email: string | null;
-  phone: string | null;
-  job_title: string | null;
-  avatar_url: string | null;
-}
-
-export function useProfile(userId: string | undefined) {
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [roles, setRoles] = useState<AppRole[]>([]);
-  const [loading, setLoading] = useState(true);
-
+  const userId = session?.user.id ?? null;
   useEffect(() => {
-    if (!userId) {
-      setProfile(null);
-      setRoles([]);
-      setLoading(false);
+    if (!supabase || !userId) {
+      setRole(null);
+      setRoleLoading(false);
+      setRoleError(null);
       return;
     }
-    let active = true;
-    setLoading(true);
-    void (async () => {
-      const [{ data: p }, { data: r }] = await Promise.all([
-        supabase
-          .from("profiles")
-          .select("id, full_name, email, phone, job_title, avatar_url")
-          .eq("id", userId)
-          .maybeSingle(),
-        supabase.from("user_roles").select("role").eq("user_id", userId),
-      ]);
-      if (!active) return;
-      setProfile((p as Profile) ?? null);
-      setRoles(((r ?? []) as { role: AppRole }[]).map((row) => row.role));
-      setLoading(false);
-    })();
-    return () => {
-      active = false;
-    };
+    setRoleLoading(true);
+    setRoleError(null);
+    supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId)
+      .then(({ data, error }) => {
+        if (error) {
+          console.error("[auth] user_roles", error.message);
+          setRole(null);
+          setRoleError(error.message);
+          setRoleLoading(false);
+          return;
+        }
+        const best = (data ?? [])
+          .map((r) => r.role)
+          .sort((a, b) => ROLE_RANK[b] - ROLE_RANK[a])[0];
+        setRole(best ?? null);
+        setRoleLoading(false);
+      }, () => {
+        setRole(null);
+        setRoleError("Não foi possível carregar o papel do usuário.");
+        setRoleLoading(false);
+      });
   }, [userId]);
 
-  return { profile, roles, loading, isAdmin: roles.includes("admin") };
+  const value = useMemo<AuthState>(
+    () => ({
+      configured: isSupabaseConfigured,
+      loading,
+      session,
+      user: session?.user ?? null,
+      role,
+      roleLoading,
+      roleError,
+      signOut: async () => {
+        if (supabase) await supabase.auth.signOut();
+      },
+    }),
+    [loading, session, role, roleLoading, roleError],
+  );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-export const roleLabels: Record<AppRole, string> = {
-  admin: "Administrador Vexa",
-  gestor: "Administrador da loja",
-  operador: "Vendedor",
-};
+export function useAuth(): AuthState {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth deve ser usado dentro de AuthProvider");
+  return ctx;
+}
+
+export function hasMinRole(role: AppRole | null, min: AppRole): boolean {
+  return role != null && ROLE_RANK[role] >= ROLE_RANK[min];
+}
