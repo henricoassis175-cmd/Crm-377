@@ -60,15 +60,18 @@ export const leadsQuery = (storeId: string, f: LeadFilters) =>
         .limit(200);
       if (f.temperatura !== "todas") q = q.eq("temperatura", f.temperatura);
       if (f.estagio !== "todos") q = q.eq("estagio", f.estagio);
-      const term = f.search.trim().replace(/[%,()]/g, "");
-      if (term) q = q.ilike("kommo_lead_id", `%${term}%`);
       const leads = check(await q);
       const contactIds = [...new Set(leads.map((l) => l.contact_id).filter((x): x is string => !!x))];
       const contacts = contactIds.length
         ? check(await db.from("contacts").select("*").eq("store_id", storeId).in("id", contactIds))
         : [];
       const byId = new Map(contacts.map((c) => [c.id, c]));
-      return leads.map((l) => ({ lead: l, contact: l.contact_id ? (byId.get(l.contact_id) ?? null) : null }));
+      const merged = leads.map((l) => ({ lead: l, contact: l.contact_id ? (byId.get(l.contact_id) ?? null) : null }));
+      const term = f.search.trim().toLowerCase();
+      if (!term) return merged;
+      return merged.filter(({ lead, contact }) =>
+        `${contact?.name ?? ""} ${lead.kommo_lead_id ?? ""}`.toLowerCase().includes(term),
+      );
     },
   });
 
