@@ -9,6 +9,7 @@ type AuthState = {
   session: Session | null;
   user: User | null;
   role: AppRole | null;
+  roleLoading: boolean;
   roleError: string | null;
   signOut: () => Promise<void>;
 };
@@ -21,6 +22,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(isSupabaseConfigured);
   const [role, setRole] = useState<AppRole | null>(null);
+  const [roleLoading, setRoleLoading] = useState(false);
   const [roleError, setRoleError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -39,8 +41,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!supabase || !userId) {
       setRole(null);
+      setRoleLoading(false);
+      setRoleError(null);
       return;
     }
+    setRoleLoading(true);
+    setRoleError(null);
     supabase
       .from("user_roles")
       .select("role")
@@ -48,13 +54,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then(({ data, error }) => {
         if (error) {
           console.error("[auth] user_roles", error.message);
+          setRole(null);
           setRoleError(error.message);
+          setRoleLoading(false);
           return;
         }
         const best = (data ?? [])
           .map((r) => r.role)
           .sort((a, b) => ROLE_RANK[b] - ROLE_RANK[a])[0];
         setRole(best ?? null);
+        setRoleLoading(false);
+      }, () => {
+        setRole(null);
+        setRoleError("Não foi possível carregar o papel do usuário.");
+        setRoleLoading(false);
       });
   }, [userId]);
 
@@ -65,12 +78,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       session,
       user: session?.user ?? null,
       role,
+      roleLoading,
       roleError,
       signOut: async () => {
         if (supabase) await supabase.auth.signOut();
       },
     }),
-    [loading, session, role, roleError],
+    [loading, session, role, roleLoading, roleError],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
