@@ -6,6 +6,10 @@ export const Route = createFileRoute("/api/public/agente/kommo")({
   server: {
     handlers: {
       POST: async ({ request }) => {
+        const length = Number(request.headers.get("content-length") ?? "0");
+        if (Number.isFinite(length) && length > 64_000) {
+          return Response.json({ error: "payload_too_large" }, { status: 413 });
+        }
         const secret = process.env["AGENT_WEBHOOK_SECRET"];
         if (!secret) return Response.json({ error: "not_configured" }, { status: 503 });
         if (request.headers.get("x-agent-secret") !== secret) return Response.json({ error: "unauthorized" }, { status: 401 });
