@@ -32,4 +32,5 @@ jobs:
         run: bun run build
 
       - name: Lint
-        run: bunx eslint . --quiet --rule 'prettier/prettier: off'
+        run: >
+          bunx eslint . --quiet --rule "prettier/prettier: off"
