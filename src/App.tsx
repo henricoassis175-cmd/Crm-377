@@ -251,7 +251,7 @@ function App() {
           <section className="metrics-surface reveal reveal-2">
             <div className="surface-header">
               <div><span className="eyebrow">DESEMPENHO</span><h2>Resumo comercial</h2></div>
-              <div className="segmented-control">{["Hoje", "7 dias", "30 dias"].map((item) => <button key={item} className={period === item ? "selected" : ""} onClick={() => setPeriod(item)}>{item}</button>)}</div>
+              <div className={`segmented-control segmented-${period === "Hoje" ? "today" : period === "7 dias" ? "week" : "month"}`}>{["Hoje", "7 dias", "30 dias"].map((item) => <button key={item} className={period === item ? "selected" : ""} onClick={() => setPeriod(item)}>{item}</button>)}</div>
             </div>
             <div className="metrics-row">
               <article><span>Novos leads</span><strong>{period === "Hoje" ? "48" : period === "7 dias" ? "284" : "1.126"}</strong><small className="positive">↑ 12,5%</small></article>
