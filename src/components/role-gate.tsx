@@ -3,11 +3,12 @@ import { Lock } from "lucide-react";
 import { hasMinRole, useAuth } from "@/hooks/use-auth";
 import type { AppRole } from "@/lib/db-types";
 import { ROLE_LABEL } from "@/lib/format";
-import { EmptyState } from "./data-state";
+import { EmptyState, LoadingRows } from "./data-state";
 
 /** Controle de UI apenas. A segurança real é garantida pelas políticas RLS no banco. */
 export function RoleGate({ min, children }: { min: AppRole; children: ReactNode }) {
-  const { configured, role } = useAuth();
+  const { configured, role, roleLoading } = useAuth();
+  if (configured && roleLoading) return <LoadingRows rows={2} />;
   if (configured && !hasMinRole(role, min)) {
     return (
       <EmptyState
