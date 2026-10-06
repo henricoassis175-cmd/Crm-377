@@ -1,6 +1,4 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
-import { PeriodControl, type Period } from "@/components/ui/period-control";
 import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -27,7 +25,7 @@ import {
   type Estagio,
   type Temperatura,
 } from "@/lib/agent-contract";
-import { formatDateTime, maskName } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/painel/")({
   head: () => ({
@@ -49,10 +47,8 @@ export const Route = createFileRoute("/_authenticated/painel/")({
 
 function Painel() {
   const { storeId, store, stores, loading } = useStores();
-  const [period, setPeriod] = useState<Period>("week");
-  const periodLabel = period === "today" ? "hoje" : period === "week" ? "7 dias" : "30 dias";
   const { data, isLoading } = useQuery({
-    queryKey: ["dashboard", storeId, period],
+    queryKey: ["dashboard", storeId],
     enabled: !!storeId,
     queryFn: async () => {
       if (!storeId)
@@ -62,13 +58,9 @@ function Painel() {
           handoffs: [],
           eventos: [],
           integracoes: [],
-          recentes: [],
         };
-      const inicio = new Date();
-      if (period === "today") inicio.setHours(0, 0, 0, 0);
-      else inicio.setTime(inicio.getTime() - (period === "week" ? 7 : 30) * 24 * 3600 * 1000);
-      const desde = inicio.toISOString();
-      const [msgs, leads, handoffs, eventos, integracoes, recentes] = await Promise.all([
+      const desde = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+      const [msgs, leads, handoffs, eventos, integracoes] = await Promise.all([
         supabase
           .from("messages")
           .select("id, latency_ms, created_at")
@@ -85,19 +77,8 @@ function Painel() {
           .from("integration_settings")
           .select("kind, status, last_tested_at")
           .eq("store_id", storeId),
-        supabase
-          .from("leads")
-          .select("id, temperature, stage, last_message_at, contacts(name)")
-          .eq("store_id", storeId)
-          .order("last_message_at", { ascending: false, nullsFirst: false })
-          .limit(5),
       ]);
-      const erro = [msgs, leads, handoffs, eventos, integracoes, recentes].find(
-        (result) => result.error,
-      )?.error;
-      if (erro) throw erro;
       return {
-        recentes: recentes.data ?? [],
         mensagens: msgs.data ?? [],
         leads: leads.data ?? [],
         handoffs: handoffs.data ?? [],
@@ -125,7 +106,7 @@ function Painel() {
   }));
   const cards = [
     {
-      label: period === "today" ? "Mensagens hoje" : `Mensagens em ${periodLabel}`,
+      label: "Mensagens em 7 dias",
       valor: mensagens.length,
       nota: "Registradas pelo fluxo n8n",
       icon: MessageSquare,
@@ -145,7 +126,7 @@ function Painel() {
     {
       label: "Latência média",
       valor: latenciaMedia === null ? "—" : `${latenciaMedia} ms`,
-      nota: falhas ? `${falhas} falha(s) · ${periodLabel}` : `Sem falhas · ${periodLabel}`,
+      nota: falhas ? `${falhas} falha(s) em 7 dias` : "Sem falhas em 7 dias",
       icon: Clock3,
     },
   ];
@@ -270,7 +251,7 @@ function Painel() {
                 <p className="text-[10px] font-semibold text-subtle">DESEMPENHO</p>
                 <h3 className="mt-0.5 text-sm font-medium">Resumo comercial</h3>
               </div>
-              <PeriodControl value={period} onChange={setPeriod} />
+              <Badge variant="outline">Últimos 7 dias</Badge>
             </div>
             <div className="grid sm:grid-cols-2 xl:grid-cols-4">
               {cards.map((c, index) => (
@@ -304,47 +285,25 @@ function Painel() {
               <div className="flex min-h-16 items-center justify-between gap-2 border-b px-4">
                 <div>
                   <p className="text-[10px] font-semibold text-subtle">TEMPO REAL</p>
-                  <h3 className="mt-0.5 text-sm font-medium">Conversas recentes</h3>
+                  <h3 className="mt-0.5 text-sm font-medium">Operação comercial</h3>
                 </div>
                 <Button asChild variant="outline" size="sm">
-                  <Link to="/painel/leads">
-                    Ver todas <ArrowRight />
-                  </Link>
+                  <Link to="/painel/leads">Abrir conversas <ArrowRight /></Link>
                 </Button>
               </div>
-              <div className="overflow-x-auto">
-                <div className="grid min-w-[460px] grid-cols-[minmax(0,1.5fr)_1fr_1fr_1fr] gap-3 border-b bg-background px-4 py-3 text-[10px] font-medium uppercase text-muted-foreground">
-                  <span>Contato</span>
-                  <span>Etapa</span>
-                  <span>Status</span>
-                  <span>Horário</span>
+              <div className="grid divide-y">
+                <div className="flex min-h-14 items-center justify-between px-4 text-xs">
+                  <span className="text-muted-foreground">Leads ativos</span>
+                  <strong className="font-medium">{data?.leads.length ?? 0}</strong>
                 </div>
-                {(data?.recentes ?? []).map((lead) => (
-                  <Link
-                    key={lead.id}
-                    to="/painel/leads"
-                    className="grid min-h-[62px] min-w-[460px] grid-cols-[minmax(0,1.5fr)_1fr_1fr_1fr] items-center gap-3 border-b px-4 text-xs transition-colors last:border-0 hover:bg-background"
-                  >
-                    <span className="flex min-w-0 items-center gap-2">
-                      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary-soft text-[10px] font-semibold text-primary">
-                        {maskName(lead.contacts?.name).slice(0, 2).toUpperCase()}
-                      </span>
-                      <span className="truncate font-medium">{maskName(lead.contacts?.name)}</span>
-                    </span>
-                    <span className="text-muted-foreground">{rotuloEstagio[lead.stage]}</span>
-                    <span>
-                      <Badge variant="outline">{rotuloTemperatura[lead.temperature]}</Badge>
-                    </span>
-                    <time className="text-[10px] text-muted-foreground">
-                      {formatDateTime(lead.last_message_at)}
-                    </time>
-                  </Link>
-                ))}
-                {!(data?.recentes ?? []).length ? (
-                  <p className="px-4 py-10 text-center text-xs text-muted-foreground">
-                    {isLoading ? "Carregando…" : "Nenhuma conversa registrada."}
-                  </p>
-                ) : null}
+                <div className="flex min-h-14 items-center justify-between px-4 text-xs">
+                  <span className="text-muted-foreground">Handoffs pendentes</span>
+                  <strong className="font-medium">{pendentes}</strong>
+                </div>
+                <div className="flex min-h-14 items-center justify-between px-4 text-xs">
+                  <span className="text-muted-foreground">Mensagens em 7 dias</span>
+                  <strong className="font-medium">{mensagens.length}</strong>
+                </div>
               </div>
             </section>
             <section className="overflow-hidden enterprise-panel">
