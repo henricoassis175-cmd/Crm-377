@@ -65,7 +65,7 @@ function Content({ storeId }: { storeId: string }) {
             <Link
               key={to}
               to={to}
-              className="group flex min-h-20 items-center justify-between gap-3 border-b px-4 py-3 transition-colors hover:bg-muted/35 sm:border-r lg:border-b-0"
+              className="group flex min-h-20 items-center justify-between gap-3 border-b px-4 py-3 transition-[background-color,transform] duration-150 ease-out hover:bg-muted/45 sm:border-r lg:border-b-0"
             >
               <span>
                 <strong className="block text-[13px] font-medium">{label}</strong>
@@ -96,7 +96,7 @@ function Kpi({
         <p className="text-xs text-muted-foreground">{label}</p>
         <QueryState query={q}>
           {(v) => (
-            <p className="mt-1 text-2xl font-semibold">
+            <p className="mt-1 font-mono text-[22px] font-medium tabular-nums tracking-[-0.03em]">
               {k === "latencia" ? F.fmtMs(v) : F.fmtNumber(v)}
             </p>
           )}
@@ -171,7 +171,7 @@ function IntegrationHealth({ storeId }: { storeId: string }) {
                 to="/painel/integracoes"
                 className="flex min-h-14 items-center gap-3 px-4 py-2 transition-colors hover:bg-muted/35"
               >
-                <span className="grid size-8 shrink-0 place-items-center rounded-md border bg-muted/30">
+                <span className="grid size-8 shrink-0 place-items-center rounded-[7px] bg-muted/60 shadow-raised">
                   <Workflow className="size-3.5 text-muted-foreground" />
                 </span>
                 <span className="min-w-0 flex-1">
