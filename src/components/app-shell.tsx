@@ -30,10 +30,10 @@ import { cn } from "@/lib/utils";
 export function Logo({ className }: { className?: string }) {
   return (
     <span className={cn("inline-flex items-center gap-2", className)}>
-      <span className="grid size-6 place-items-center rounded-[6px] bg-foreground text-[10px] font-bold tracking-tight text-background">
+      <span className="grid size-6 place-items-center rounded-[6px] bg-[#252427] text-[10px] font-semibold tracking-[-0.02em] text-white shadow-raised">
         377
       </span>
-      <span className="text-[13px] font-semibold tracking-tight">CRM 377</span>
+      <span className="text-[13px] font-medium tracking-[-0.02em]">CRM 377</span>
     </span>
   );
 }
@@ -51,8 +51,8 @@ function StoreSwitcher() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="flex w-full items-center gap-2 rounded-md border bg-card px-2 py-1.5 text-left shadow-xs transition-colors hover:bg-accent">
-          <span className="grid size-6 shrink-0 place-items-center rounded bg-primary/10 text-[11px] font-semibold text-primary">
+        <button className="flex w-full items-center gap-2 rounded-[8px] bg-card px-2 py-1.5 text-left shadow-raised transition-[background-color,box-shadow] duration-150 hover:bg-accent hover:shadow-ring-xs">
+          <span className="grid size-6 shrink-0 place-items-center rounded-[6px] bg-primary/10 text-[11px] font-medium text-primary">
             {currentStore?.store_name.slice(0, 1).toUpperCase() ?? "—"}
           </span>
           <span className="min-w-0 flex-1">
@@ -94,7 +94,7 @@ function SidebarContent({ onNavigate, onSearch }: { onNavigate?: () => void; onS
     if (!list.length) return null;
     return (
       <div className="space-y-0.5">
-        {label && <p className="px-2 pt-3 pb-1 text-[10.5px] font-medium tracking-wider text-muted-foreground uppercase">{label}</p>}
+        {label && <p className="px-2 pt-3 pb-1 text-[10px] font-medium tracking-[0.08em] text-muted-foreground uppercase">{label}</p>}
         {list.map((i) => {
           const active = i.to === "/painel" ? pathname === "/painel" || pathname === "/painel/" : pathname.startsWith(i.to);
           return (
@@ -103,8 +103,8 @@ function SidebarContent({ onNavigate, onSearch }: { onNavigate?: () => void; onS
               to={i.to}
               onClick={onNavigate}
               className={cn(
-                "flex h-8 items-center gap-2.5 rounded-md px-2 text-[13px] text-sidebar-foreground transition-colors duration-150 hover:bg-sidebar-accent",
-                active && "bg-card font-medium text-sidebar-accent-foreground shadow-xs",
+                "flex h-8 items-center gap-2.5 rounded-[7px] px-2 text-[12.5px] text-sidebar-foreground transition-[background-color,color,box-shadow] duration-150 hover:bg-sidebar-accent",
+                active && "bg-card font-medium text-sidebar-accent-foreground shadow-raised",
               )}
             >
               <i.icon className={cn("size-4 text-muted-foreground", active && "text-primary")} />
@@ -133,11 +133,11 @@ function SidebarContent({ onNavigate, onSearch }: { onNavigate?: () => void; onS
         <StoreSwitcher />
         <button
           onClick={onSearch}
-          className="flex h-8 w-full items-center gap-2 rounded-md border bg-card px-2 text-[12.5px] text-muted-foreground transition-colors hover:text-foreground"
+          className="flex h-8 w-full items-center gap-2 rounded-[7px] bg-card px-2 text-[12px] text-muted-foreground shadow-raised transition-[background-color,color,box-shadow] duration-150 hover:bg-accent hover:text-foreground"
         >
           <Search className="size-3.5" />
           <span className="flex-1 text-left">Busca rápida</span>
-          <kbd className="rounded border bg-muted px-1 font-mono text-[10px]">⌘K</kbd>
+          <kbd className="rounded-[4px] bg-muted px-1.5 py-0.5 font-mono text-[9px] shadow-raised">⌘K</kbd>
         </button>
       </div>
       <nav className="flex-1 overflow-y-auto px-3 pb-3">
@@ -218,11 +218,11 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background">
-      <aside className="fixed inset-y-0 left-0 hidden w-[244px] border-r bg-sidebar lg:block">
+      <aside className="fixed inset-y-0 left-0 hidden w-[244px] border-r border-sidebar-border bg-sidebar lg:block">
         <SidebarContent onSearch={() => setCmdOpen(true)} />
       </aside>
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent side="left" className="w-[264px] bg-sidebar p-0">
+        <SheetContent side="left" className="w-[264px] border-r border-sidebar-border bg-sidebar p-0 shadow-none">
           <SheetTitle className="sr-only">Navegação</SheetTitle>
           <SidebarContent
             onNavigate={() => setMobileOpen(false)}
@@ -236,22 +236,22 @@ export function AppShell({ children }: { children: ReactNode }) {
       <CommandPalette open={cmdOpen} setOpen={setCmdOpen} />
 
       <div className="lg:pl-[244px]">
-        <header className="sticky top-0 z-20 flex h-[50px] items-center gap-3 border-b bg-background/85 px-3 backdrop-blur md:px-5">
+        <header className="sticky top-0 z-20 flex h-[50px] items-center gap-3 border-b bg-background/92 px-3 backdrop-blur-xl md:px-5">
           <Button size="icon" variant="ghost" className="size-8 lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Abrir menu">
             <Menu className="size-4" />
           </Button>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate text-[13.5px] font-semibold">{current?.label}</h1>
-            <p className="hidden truncate text-[11.5px] text-muted-foreground sm:block">{current?.description}</p>
+            <h1 className="truncate text-[13px] font-medium tracking-[-0.01em]">{current?.label}</h1>
+            <p className="hidden truncate text-[11px] text-muted-foreground sm:block">{current?.description}</p>
           </div>
           {currentStore && (
-            <span className="hidden items-center gap-1.5 rounded-md border bg-card px-2 py-1 text-xs md:inline-flex">
+            <span className="hidden items-center gap-1.5 rounded-[6px] bg-card px-2 py-1 text-[11px] shadow-raised md:inline-flex">
               <span className={cn("size-1.5 rounded-full", currentStore.agent_paused ? "bg-warning" : "bg-success")} />
               {currentStore.store_name}
             </span>
           )}
           {!configured && (
-            <span className="hidden rounded-md border border-dashed px-2 py-1 text-xs text-muted-foreground sm:inline">Banco não conectado</span>
+            <span className="hidden rounded-[6px] bg-secondary px-2 py-1 text-[10.5px] text-muted-foreground sm:inline">Banco não conectado</span>
           )}
           <Button size="icon" variant="ghost" className="size-8" aria-label="Notificações">
             <Bell className="size-4" />
@@ -262,7 +262,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </Link>
           </Button>
         </header>
-        <main>{children}</main>
+        <main className="min-h-[calc(100vh-50px)]">{children}</main>
       </div>
     </div>
   );
