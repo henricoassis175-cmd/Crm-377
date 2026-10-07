@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { PageBody, Panel, Pill } from "@/components/panel";
+import { PageBody, Pill } from "@/components/panel";
+import { PageHeader, DataTableFrame, tableCellClass, tableHeadClass, tableRowClass } from "@/components/product-ui";
 import { QueryState, EmptyState } from "@/components/data-state";
 import { RoleGate } from "@/components/role-gate";
 import { useAuth } from "@/hooks/use-auth";
@@ -24,42 +25,38 @@ function Page() {
 
   return (
     <PageBody>
+      <PageHeader
+        eyebrow="Workspace"
+        title="Lojas"
+        description="Ambientes operacionais isolados, cada um com agente, integrações e permissões próprias."
+      />
       <RoleGate min="gestor">
-        <Panel title="Lojas" description="A lista de lojas não depende de uma loja já selecionada.">
+        <DataTableFrame>
           <QueryState
             query={q}
             enabled={configured}
             isEmpty={(d) => !d.length}
-            empty={
-              <EmptyState
-                title="Nenhuma loja cadastrada"
-                description="Quando o Supabase estiver conectado, um Administrador Vexa poderá cadastrar a primeira loja sem ficar preso a um seletor vazio."
-              />
-            }
+            empty={<EmptyState title="Nenhuma loja cadastrada" description="Quando o banco estiver conectado, a primeira loja poderá ser criada por um Administrador Vexa." />}
           >
             {(d) => (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[560px] text-[13px]">
-                  <thead className="border-b bg-muted/30 text-left text-[11px] text-muted-foreground">
+                <table className="w-full min-w-[720px]">
+                  <thead className={tableHeadClass}>
                     <tr>
-                      <th className="px-4 py-2 font-medium">Loja</th>
-                      <th className="px-4 py-2 font-medium">Agente</th>
-                      <th className="px-4 py-2 font-medium">Modelo</th>
-                      <th className="px-4 py-2 font-medium">Status</th>
+                      <th className="h-9 px-4 font-medium">Loja</th>
+                      <th className="h-9 px-4 font-medium">Agente</th>
+                      <th className="h-9 px-4 font-medium">Modelo</th>
+                      <th className="h-9 px-4 text-right font-medium">Status</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y">
+                  <tbody>
                     {d.map((s) => (
-                      <tr key={s.id}>
-                        <td className="px-4 py-2 font-medium">{s.store_name}</td>
-                        <td className="px-4 py-2 text-muted-foreground">{s.agent_name ?? "—"}</td>
-                        <td className="px-4 py-2 text-muted-foreground">{s.ai_model}</td>
-                        <td className="px-4 py-2">
-                          {s.agent_paused ? (
-                            <Pill tone="warning">Agente pausado</Pill>
-                          ) : (
-                            <Pill tone="success">Ativo</Pill>
-                          )}
+                      <tr key={s.id} className={tableRowClass}>
+                        <td className={tableCellClass + " font-medium"}>{s.store_name}</td>
+                        <td className={tableCellClass + " text-muted-foreground"}>{s.agent_name ?? "—"}</td>
+                        <td className={tableCellClass + " font-mono text-[10.5px] text-muted-foreground"}>{s.ai_model}</td>
+                        <td className={tableCellClass + " text-right"}>
+                          <Pill tone={s.agent_paused ? "warning" : "success"}>{s.agent_paused ? "Agente pausado" : "Ativo"}</Pill>
                         </td>
                       </tr>
                     ))}
@@ -68,7 +65,7 @@ function Page() {
               </div>
             )}
           </QueryState>
-        </Panel>
+        </DataTableFrame>
       </RoleGate>
     </PageBody>
   );
