@@ -1,7 +1,17 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, PlugZap, Workflow } from "lucide-react";
+import {
+  ArrowUpRight,
+  CircleDot,
+  PlugZap,
+  Workflow,
+} from "lucide-react";
 import { PageBody, Panel, Pill } from "@/components/panel";
+import {
+  PageHeader,
+  StatGrid,
+  StatTile,
+} from "@/components/product-ui";
 import { QueryState, EmptyState } from "@/components/data-state";
 import { StoreScope } from "@/components/store-scope";
 import { RoleGate } from "@/components/role-gate";
@@ -23,6 +33,11 @@ export const Route = createFileRoute("/_authenticated/painel/")({
 function Page() {
   return (
     <PageBody>
+      <PageHeader
+        eyebrow="Operação comercial"
+        title="Visão geral"
+        description="Leads, conversas, handoffs e saúde operacional em uma leitura única da loja selecionada."
+      />
       <RoleGate min="operador">
         <StoreScope>{(storeId) => <Content storeId={storeId} />}</StoreScope>
       </RoleGate>
@@ -31,51 +46,53 @@ function Page() {
 }
 
 function Content({ storeId }: { storeId: string }) {
-  const kpis = [
-    ["mensagens7d", "Mensagens 7 dias"],
-    ["leadsAtivos", "Leads ativos"],
-    ["handoffsPendentes", "Handoffs pendentes"],
-    ["latencia", "Latência média"],
-    ["falhas", "Falhas de integração"],
-  ] as const;
-
   const shortcuts = [
-    ["/painel/leads", "Leads e conversas", "Acompanhar o funil e o histórico"],
+    ["/painel/leads", "Leads e conversas", "Acompanhar funil e histórico"],
     ["/painel/handoffs", "Handoffs", "Atendimento humano pendente"],
     ["/painel/catalogo", "Catálogo", "Produtos, preços e estoque"],
-    ["/painel/integracoes", "Integrações", "Status das conexões"],
+    ["/painel/integracoes", "Integrações", "Conexões e eventos"],
   ] as const;
 
   return (
-    <div className="space-y-4">
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5" aria-label="Indicadores principais">
-        {kpis.map(([k, label]) => (
-          <Kpi key={k} storeId={storeId} k={k} label={label} />
-        ))}
-      </section>
+    <div className="space-y-5">
+      <StatGrid>
+        <Kpi storeId={storeId} k="mensagens7d" label="Mensagens · 7 dias" hint="Volume processado" />
+        <Kpi storeId={storeId} k="leadsAtivos" label="Leads ativos" hint="Em acompanhamento" />
+        <Kpi storeId={storeId} k="handoffsPendentes" label="Handoffs" hint="Pendentes agora" />
+        <Kpi storeId={storeId} k="latencia" label="Latência média" hint="Respostas do agente" />
+        <Kpi storeId={storeId} k="falhas" label="Falhas · 7 dias" hint="Eventos de integração" danger />
+      </StatGrid>
 
-      <div className="grid gap-4 xl:grid-cols-[1.35fr_.85fr]">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(300px,.72fr)]">
         <LeadDistribution storeId={storeId} />
-        <IntegrationHealth storeId={storeId} />
-      </div>
 
-      <Panel title="Atalhos operacionais" description="Acesse rapidamente os módulos mais usados.">
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4">
-          {shortcuts.map(([to, label, description]) => (
-            <Link
-              key={to}
-              to={to}
-              className="group flex min-h-20 items-center justify-between gap-3 border-b px-4 py-3 transition-[background-color,transform] duration-150 ease-out hover:bg-muted/45 sm:border-r lg:border-b-0"
-            >
-              <span>
-                <strong className="block text-[13px] font-medium">{label}</strong>
-                <small className="mt-1 block text-[11px] text-muted-foreground">{description}</small>
-              </span>
-              <ArrowRight className="size-3.5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-            </Link>
-          ))}
+        <div className="space-y-5">
+          <IntegrationHealth storeId={storeId} />
+
+          <Panel title="Navegação operacional" description="Acesso direto aos fluxos mais usados.">
+            <div className="divide-y divide-border/70">
+              {shortcuts.map(([to, label, description]) => (
+                <Link
+                  key={to}
+                  to={to}
+                  className="group flex min-h-[58px] items-center gap-3 px-4 py-2.5 transition-colors duration-150 hover:bg-muted/35"
+                >
+                  <span className="grid size-7 shrink-0 place-items-center rounded-[6px] bg-muted/70 text-muted-foreground">
+                    <ArrowUpRight className="size-3" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <strong className="block truncate text-[11.5px] font-medium">{label}</strong>
+                    <small className="mt-0.5 block truncate text-[9.5px] text-muted-foreground">
+                      {description}
+                    </small>
+                  </span>
+                  <ArrowUpRight className="size-3 text-muted-foreground transition-transform duration-150 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                </Link>
+              ))}
+            </div>
+          </Panel>
         </div>
-      </Panel>
+      </div>
     </div>
   );
 }
@@ -84,25 +101,33 @@ function Kpi({
   storeId,
   k,
   label,
+  hint,
+  danger = false,
 }: {
   storeId: string;
   k: Parameters<typeof Q.kpiQuery>[1];
   label: string;
+  hint: string;
+  danger?: boolean;
 }) {
   const q = useQuery(Q.kpiQuery(storeId, k));
+
+  if (q.isLoading) {
+    return <StatTile label={label} value="···" hint={hint} />;
+  }
+
+  if (q.isError) {
+    return <StatTile label={label} value="—" hint="Não foi possível carregar" tone="danger" />;
+  }
+
+  const value = q.data;
   return (
-    <Panel className="card-lift">
-      <div className="p-4">
-        <p className="text-xs text-muted-foreground">{label}</p>
-        <QueryState query={q}>
-          {(v) => (
-            <p className="mt-1 font-mono text-[22px] font-medium tabular-nums tracking-[-0.03em]">
-              {k === "latencia" ? F.fmtMs(v) : F.fmtNumber(v)}
-            </p>
-          )}
-        </QueryState>
-      </div>
-    </Panel>
+    <StatTile
+      label={label}
+      value={k === "latencia" ? F.fmtMs(value) : F.fmtNumber(value)}
+      hint={hint}
+      tone={danger && typeof value === "number" && value > 0 ? "danger" : "default"}
+    />
   );
 }
 
@@ -112,38 +137,85 @@ function LeadDistribution({ storeId }: { storeId: string }) {
   const stages = ["abertura", "desenvolvimento", "ancoragem", "pre_fechamento", "handoff"] as const;
 
   return (
-    <Panel title="Funil comercial" description="Distribuição real dos leads ativos.">
+    <Panel
+      title="Pipeline comercial"
+      description="Distribuição dos leads ativos por temperatura e estágio."
+      actions={<Pill tone="primary">Tempo real</Pill>}
+      className="min-h-[390px]"
+    >
       <QueryState
         query={q}
         isEmpty={(rows) => !rows.length}
-        empty={<EmptyState title="Nenhum lead ativo" description="A distribuição aparecerá quando houver leads na loja." />}
+        empty={
+          <EmptyState
+            title="Nenhum lead ativo"
+            description="A distribuição do pipeline aparecerá quando houver leads na loja."
+          />
+        }
       >
-        {(rows) => (
-          <div className="grid md:grid-cols-2">
-            <div className="border-b p-4 md:border-r md:border-b-0">
-              <p className="mb-3 text-xs font-medium">Temperatura</p>
-              <div className="space-y-1">
-                {temperatures.map((temperature) => (
-                  <div key={temperature} className="flex min-h-9 items-center justify-between border-b last:border-0">
-                    <span className="text-[12px] text-muted-foreground">{F.TEMPERATURA_LABEL[temperature]}</span>
-                    <Pill>{rows.filter((row) => row.temperatura === temperature).length}</Pill>
-                  </div>
-                ))}
+        {(rows) => {
+          const total = rows.length || 1;
+          const temperatureCounts = temperatures.map((temperature) => ({
+            key: temperature,
+            label: F.TEMPERATURA_LABEL[temperature],
+            value: rows.filter((row) => row.temperatura === temperature).length,
+          }));
+          const stageCounts = stages.map((stage) => ({
+            key: stage,
+            label: F.ESTAGIO_LABEL[stage],
+            value: rows.filter((row) => row.estagio === stage).length,
+          }));
+
+          return (
+            <div className="grid md:grid-cols-[.82fr_1.18fr]">
+              <div className="border-b border-border/70 p-5 md:border-b-0 md:border-r">
+                <p className="mb-5 text-[9.5px] font-semibold uppercase tracking-[0.09em] text-muted-foreground">
+                  Temperatura
+                </p>
+                <div className="space-y-4">
+                  {temperatureCounts.map((item) => (
+                    <div key={item.key}>
+                      <div className="mb-1.5 flex items-center justify-between">
+                        <span className="text-[11px] text-foreground/85">{item.label}</span>
+                        <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+                          {F.fmtNumber(item.value)}
+                        </span>
+                      </div>
+                      <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full bg-foreground/72 transition-[width] duration-200 ease-out"
+                          style={{ width: `${Math.max(3, (item.value / total) * 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="p-5">
+                <p className="mb-3 text-[9.5px] font-semibold uppercase tracking-[0.09em] text-muted-foreground">
+                  Estágio do funil
+                </p>
+                <div className="divide-y divide-border/70">
+                  {stageCounts.map((item, index) => (
+                    <div key={item.key} className="flex min-h-[52px] items-center gap-3">
+                      <span className="font-mono text-[9px] text-muted-foreground">
+                        {String(index + 1).padStart(2, "0")}
+                      </span>
+                      <span className="flex-1 text-[11.5px]">{item.label}</span>
+                      <span className="font-mono text-[13px] font-medium tabular-nums">
+                        {F.fmtNumber(item.value)}
+                      </span>
+                      <span className="w-10 text-right font-mono text-[9.5px] text-muted-foreground">
+                        {Math.round((item.value / total) * 100)}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
-            <div className="p-4">
-              <p className="mb-3 text-xs font-medium">Estágios</p>
-              <div className="space-y-1">
-                {stages.map((stage) => (
-                  <div key={stage} className="flex min-h-9 items-center justify-between border-b last:border-0">
-                    <span className="text-[12px] text-muted-foreground">{F.ESTAGIO_LABEL[stage]}</span>
-                    <Pill>{rows.filter((row) => row.estagio === stage).length}</Pill>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
+          );
+        }}
       </QueryState>
     </Panel>
   );
@@ -155,8 +227,8 @@ function IntegrationHealth({ storeId }: { storeId: string }) {
   return (
     <Panel
       title="Saúde das integrações"
-      description="Nenhuma conexão é considerada saudável sem teste registrado."
-      actions={<PlugZap className="size-4 text-muted-foreground" />}
+      description="Status baseado no último teste registrado."
+      actions={<PlugZap className="size-3.5 text-muted-foreground" />}
     >
       <QueryState
         query={q}
@@ -164,25 +236,38 @@ function IntegrationHealth({ storeId }: { storeId: string }) {
         empty={<EmptyState title="Nenhuma integração configurada" />}
       >
         {(rows) => (
-          <div className="divide-y">
+          <div className="divide-y divide-border/70">
             {rows.map((integration) => (
               <Link
                 key={integration.id}
                 to="/painel/integracoes"
-                className="flex min-h-14 items-center gap-3 px-4 py-2 transition-colors hover:bg-muted/35"
+                className="flex min-h-[56px] items-center gap-3 px-4 py-2 transition-colors duration-150 hover:bg-muted/35"
               >
-                <span className="grid size-8 shrink-0 place-items-center rounded-[7px] bg-muted/60 shadow-raised">
-                  <Workflow className="size-3.5 text-muted-foreground" />
+                <span className="grid size-7 shrink-0 place-items-center rounded-[6px] bg-muted/60">
+                  <Workflow className="size-3 text-muted-foreground" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <strong className="block truncate text-[12px] font-medium capitalize">{integration.provider}</strong>
-                  <small className="block truncate text-[10px] text-muted-foreground">
+                  <strong className="block truncate text-[11px] font-medium capitalize">
+                    {integration.provider}
+                  </strong>
+                  <small className="mt-0.5 block truncate text-[9px] text-muted-foreground">
                     {integration.last_tested_at ? F.fmtDateTime(integration.last_tested_at) : "Nunca testado"}
                   </small>
                 </span>
-                <Pill tone={integration.status === "testado" ? "success" : integration.status === "configurado" ? "warning" : "neutral"}>
-                  {integration.status.replaceAll("_", " ")}
-                </Pill>
+                <span className="flex items-center gap-1.5">
+                  <CircleDot
+                    className={
+                      integration.status === "testado"
+                        ? "size-3 text-success"
+                        : integration.status === "configurado"
+                          ? "size-3 text-warning"
+                          : "size-3 text-muted-foreground"
+                    }
+                  />
+                  <span className="text-[9.5px] capitalize text-muted-foreground">
+                    {integration.status.replaceAll("_", " ")}
+                  </span>
+                </span>
               </Link>
             ))}
           </div>

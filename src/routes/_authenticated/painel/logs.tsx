@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { PageBody, Panel, Pill } from "@/components/panel";
+import { PageBody } from "@/components/panel";
+import { PageHeader, DataTableFrame, tableCellClass, tableHeadClass, tableRowClass } from "@/components/product-ui";
 import { QueryState, EmptyState } from "@/components/data-state";
 import { StoreScope } from "@/components/store-scope";
 import { RoleGate } from "@/components/role-gate";
@@ -15,6 +16,11 @@ export const Route = createFileRoute("/_authenticated/painel/logs")({
 function Page() {
   return (
     <PageBody>
+      <PageHeader
+        eyebrow="Governança"
+        title="Logs e auditoria"
+        description="Trilha de ações administrativas e operacionais para investigação e conformidade."
+      />
       <RoleGate min="gestor">
         <StoreScope>{(storeId) => <Content storeId={storeId} />}</StoreScope>
       </RoleGate>
@@ -24,5 +30,32 @@ function Page() {
 
 function Content({ storeId }: { storeId: string }) {
   const q = useQuery(Q.auditQuery(storeId));
-  return <Panel title="Auditoria"><QueryState query={q} isEmpty={(d) => !d.length} empty={<EmptyState title="Nenhum registro" />}>{(d) => <div className="overflow-x-auto"><table className="w-full text-[13px]"><tbody className="divide-y">{d.map((a) => <tr key={a.id}><td className="px-4 py-2 font-mono text-xs">{a.action}</td><td className="px-4 py-2">{a.entity}</td><td className="px-4 py-2 text-muted-foreground">{F.fmtDateTime(a.created_at)}</td></tr>)}</tbody></table></div>}</QueryState></Panel>;
+  return (
+    <DataTableFrame>
+      <QueryState query={q} isEmpty={(d) => !d.length} empty={<EmptyState title="Nenhum registro" />}>
+        {(d) => (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[660px]">
+              <thead className={tableHeadClass}>
+                <tr>
+                  <th className="h-9 px-4 font-medium">Ação</th>
+                  <th className="h-9 px-4 font-medium">Entidade</th>
+                  <th className="h-9 px-4 text-right font-medium">Data</th>
+                </tr>
+              </thead>
+              <tbody>
+                {d.map((a) => (
+                  <tr key={a.id} className={tableRowClass}>
+                    <td className={`${tableCellClass} font-mono text-[10.5px]`}>{a.action}</td>
+                    <td className={tableCellClass}>{a.entity}</td>
+                    <td className={`${tableCellClass} text-right font-mono text-[10.5px] text-muted-foreground`}>{F.fmtDateTime(a.created_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </QueryState>
+    </DataTableFrame>
+  );
 }
